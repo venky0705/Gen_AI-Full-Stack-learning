@@ -6,3 +6,11 @@ langchain
 langchain-core
 langchain-google-genai
 langchain-groq
+streamlit
+python-dotenv
+google-genai
+groq
+pypdf
+faiss-cpu
+sentence-transformers
+numpy
