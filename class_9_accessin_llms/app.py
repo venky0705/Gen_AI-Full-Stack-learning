@@ -49,7 +49,7 @@ def get_secret(name):
         return os.getenv(name)
 
 
-GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+GEMINI_API_KEY = get_secret("GOOGLE_API_KEY")
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
 
 
