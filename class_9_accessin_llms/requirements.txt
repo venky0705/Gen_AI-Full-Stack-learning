@@ -1,12 +1,4 @@
 streamlit
-google-genai
-groq
-python-dotenv
-langchain
-langchain-core
-langchain-google-genai
-langchain-groq
-streamlit
 python-dotenv
 google-genai
 groq
