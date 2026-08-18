@@ -1,5 +1,4 @@
 import os
-import base64
 import tempfile
 from pathlib import Path
 
@@ -8,7 +7,6 @@ from dotenv import load_dotenv
 
 from google import genai
 from google.genai import types
-
 from groq import Groq
 
 
@@ -24,18 +22,37 @@ st.set_page_config(
 
 
 # =========================================================
-# 2. LOAD ENVIRONMENT VARIABLES
+# 2. LOAD API KEYS
 # =========================================================
 
-# If app.py is in a subfolder and .env is one level above:
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 ENV_PATH = PROJECT_ROOT / ".env"
 
-load_dotenv(ENV_PATH, override=True)
+# Local .env
+if ENV_PATH.exists():
+    load_dotenv(ENV_PATH, override=True)
 
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+def get_secret(name):
+    """
+    First try environment variables.
+    If not found, try Streamlit Cloud secrets.
+    """
+
+    value = os.getenv(name)
+
+    if value:
+        return value
+
+    try:
+        return st.secrets[name]
+    except Exception:
+        return None
+
+
+GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
 
 
 # =========================================================
@@ -45,9 +62,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 gemini_client = None
 groq_client = None
 
-if GEMINI_API_KEY:
+if GOOGLE_API_KEY:
     gemini_client = genai.Client(
-        api_key=GEMINI_API_KEY
+        api_key=GOOGLE_API_KEY
     )
 
 if GROQ_API_KEY:
@@ -57,7 +74,7 @@ if GROQ_API_KEY:
 
 
 # =========================================================
-# 4. CSS
+# 4. CUSTOM CSS
 # =========================================================
 
 st.markdown(
@@ -67,14 +84,14 @@ st.markdown(
     .stApp {
         background:
             radial-gradient(
-                circle at top left,
-                rgba(60,100,255,0.12),
-                transparent 30%
+                circle at 18% 8%,
+                rgba(50, 100, 255, 0.12),
+                transparent 28%
             ),
             radial-gradient(
-                circle at top right,
-                rgba(160,70,255,0.12),
-                transparent 30%
+                circle at 82% 12%,
+                rgba(170, 70, 255, 0.12),
+                transparent 28%
             ),
             linear-gradient(
                 135deg,
@@ -85,13 +102,50 @@ st.markdown(
     }
 
     .main .block-container {
-        max-width: 1100px;
+        max-width: 1150px;
         padding-top: 2rem;
+        padding-bottom: 5rem;
+    }
+
+    section[data-testid="stSidebar"] {
+        background:
+            linear-gradient(
+                180deg,
+                rgba(16, 24, 45, 0.98),
+                rgba(8, 13, 26, 0.98)
+            );
+
+        border-right:
+            1px solid rgba(130, 150, 255, 0.15);
     }
 
     div.stButton > button {
+        min-height: 48px;
         border-radius: 14px;
-        min-height: 46px;
+
+        border:
+            1px solid rgba(120, 145, 255, 0.20);
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(20, 30, 55, 0.92),
+                rgba(22, 22, 45, 0.92)
+            );
+
+        color: white;
+
+        transition: 0.2s ease;
+    }
+
+    div.stButton > button:hover {
+        transform: translateY(-2px);
+
+        border-color:
+            rgba(130, 120, 255, 0.60);
+
+        box-shadow:
+            0 8px 24px rgba(80, 70, 200, 0.22);
     }
 
     [data-testid="stFileUploader"] {
@@ -105,13 +159,12 @@ st.markdown(
 
 
 # =========================================================
-# 5. HELPERS
+# 5. HELPER FUNCTIONS
 # =========================================================
 
 def get_gemini_text(response):
     """
-    Handles Gemini responses that may return
-    plain text or structured content.
+    Safely extract text from Gemini response.
     """
 
     if hasattr(response, "text") and response.text:
@@ -122,7 +175,7 @@ def get_gemini_text(response):
 
 def gemini_text(prompt):
     """
-    Text -> Text
+    Text -> Text using Gemini
     """
 
     response = gemini_client.models.generate_content(
@@ -135,17 +188,21 @@ def gemini_text(prompt):
 
 def gemini_image_to_text(uploaded_file, prompt):
     """
-    Image -> Text
+    Image -> Text using Gemini vision
     """
 
     image_bytes = uploaded_file.getvalue()
 
-    mime_type = uploaded_file.type or "image/jpeg"
+    mime_type = (
+        uploaded_file.type
+        or "image/jpeg"
+    )
 
     response = gemini_client.models.generate_content(
         model="gemini-3.6-flash",
         contents=[
             prompt or "Describe this image in detail.",
+
             types.Part.from_bytes(
                 data=image_bytes,
                 mime_type=mime_type
@@ -158,11 +215,12 @@ def gemini_image_to_text(uploaded_file, prompt):
 
 def groq_text(prompt):
     """
-    Text -> Text
+    Text -> Text using Groq
     """
 
     response = groq_client.chat.completions.create(
         model="openai/gpt-oss-20b",
+
         messages=[
             {
                 "role": "user",
@@ -184,15 +242,20 @@ def groq_audio_to_text(uploaded_file):
     with tempfile.NamedTemporaryFile(
         delete=False,
         suffix=suffix
-    ) as temp:
+    ) as temp_file:
 
-        temp.write(uploaded_file.getvalue())
+        temp_file.write(
+            uploaded_file.getvalue()
+        )
 
-        temp_path = temp.name
+        temp_path = temp_file.name
 
     try:
 
-        with open(temp_path, "rb") as audio_file:
+        with open(
+            temp_path,
+            "rb"
+        ) as audio_file:
 
             transcription = (
                 groq_client.audio.transcriptions.create(
@@ -215,8 +278,6 @@ def groq_audio_to_text(uploaded_file):
 def gemini_text_to_speech(text):
     """
     Text -> Audio using Gemini TTS
-
-    Returns raw PCM audio bytes.
     """
 
     response = gemini_client.models.generate_content(
@@ -258,51 +319,39 @@ def save_pcm_as_wav(
     filename="generated_audio.wav"
 ):
     """
-    Gemini TTS returns PCM audio.
-    Convert it to WAV.
+    Save Gemini PCM audio as WAV.
     """
 
     import wave
 
-    with wave.open(filename, "wb") as wf:
+    with wave.open(
+        filename,
+        "wb"
+    ) as wf:
 
         wf.setnchannels(1)
-
         wf.setsampwidth(2)
-
         wf.setframerate(24000)
-
         wf.writeframes(audio_data)
 
     return filename
 
 
 # =========================================================
-# 6. HEADER
-# =========================================================
-
-st.title("✨ Free Multimodal AI Playground")
-
-st.caption(
-    "Gemini + Groq | Text, Image and Audio"
-)
-
-
-# =========================================================
-# 7. SIDEBAR
+# 6. SIDEBAR
 # =========================================================
 
 with st.sidebar:
 
     st.header("API Status")
 
-    if GEMINI_API_KEY:
-        st.success("Gemini connected")
+    if GOOGLE_API_KEY:
+        st.success("Google Gemini API connected")
     else:
-        st.error("Gemini API key missing")
+        st.error("Google API key missing")
 
     if GROQ_API_KEY:
-        st.success("Groq connected")
+        st.success("Groq API connected")
     else:
         st.error("Groq API key missing")
 
@@ -327,7 +376,18 @@ with st.sidebar:
 
 
 # =========================================================
-# 8. MODE SELECTION
+# 7. HEADER
+# =========================================================
+
+st.title("✨ Free Multimodal AI Playground")
+
+st.caption(
+    "Gemini + Groq | Text, Image and Audio"
+)
+
+
+# =========================================================
+# 8. TASK SELECTION
 # =========================================================
 
 task = st.selectbox(
@@ -368,13 +428,17 @@ if task == "Text → Text":
 
         if not prompt.strip():
 
-            st.warning("Enter a prompt.")
+            st.warning(
+                "Please enter a prompt."
+            )
 
         else:
 
             try:
 
-                with st.spinner("Generating..."):
+                with st.spinner(
+                    "Generating..."
+                ):
 
                     if provider == "Groq":
 
@@ -384,21 +448,29 @@ if task == "Text → Text":
                             )
                             st.stop()
 
-                        result = groq_text(prompt)
+                        result = groq_text(
+                            prompt
+                        )
 
                     else:
 
                         if not gemini_client:
                             st.error(
-                                "GEMINI_API_KEY not configured."
+                                "GOOGLE_API_KEY not configured."
                             )
                             st.stop()
 
-                        result = gemini_text(prompt)
+                        result = gemini_text(
+                            prompt
+                        )
 
-                st.subheader("Response")
+                st.subheader(
+                    "Response"
+                )
 
-                st.markdown(result)
+                st.markdown(
+                    result
+                )
 
             except Exception as e:
 
@@ -448,13 +520,13 @@ elif task == "Image → Text":
         if not gemini_client:
 
             st.error(
-                "Gemini API key missing."
+                "GOOGLE_API_KEY not configured."
             )
 
         elif image_file is None:
 
             st.warning(
-                "Upload an image first."
+                "Please upload an image first."
             )
 
         else:
@@ -465,14 +537,20 @@ elif task == "Image → Text":
                     "Analyzing image..."
                 ):
 
-                    result = gemini_image_to_text(
-                        image_file,
-                        prompt
+                    result = (
+                        gemini_image_to_text(
+                            image_file,
+                            prompt
+                        )
                     )
 
-                st.subheader("Image description")
+                st.subheader(
+                    "Image description"
+                )
 
-                st.markdown(result)
+                st.markdown(
+                    result
+                )
 
             except Exception as e:
 
@@ -503,7 +581,9 @@ elif task == "Audio → Text":
 
     if audio_file:
 
-        st.audio(audio_file)
+        st.audio(
+            audio_file
+        )
 
     if st.button(
         "Transcribe",
@@ -513,13 +593,13 @@ elif task == "Audio → Text":
         if not groq_client:
 
             st.error(
-                "Groq API key missing."
+                "GROQ_API_KEY not configured."
             )
 
         elif audio_file is None:
 
             st.warning(
-                "Upload an audio file first."
+                "Please upload an audio file first."
             )
 
         else:
@@ -536,7 +616,9 @@ elif task == "Audio → Text":
                         )
                     )
 
-                st.subheader("Transcription")
+                st.subheader(
+                    "Transcription"
+                )
 
                 st.markdown(
                     str(transcript)
@@ -576,13 +658,13 @@ elif task == "Text → Audio":
         if not gemini_client:
 
             st.error(
-                "Gemini API key missing."
+                "GOOGLE_API_KEY not configured."
             )
 
         elif not text.strip():
 
             st.warning(
-                "Enter some text."
+                "Please enter some text."
             )
 
         else:
@@ -605,7 +687,9 @@ elif task == "Text → Audio":
                         )
                     )
 
-                st.subheader("Generated speech")
+                st.subheader(
+                    "Generated speech"
+                )
 
                 st.audio(
                     filename,
@@ -626,6 +710,6 @@ elif task == "Text → Audio":
 st.markdown("---")
 
 st.caption(
-    "Free API access is subject to provider "
-    "rate limits and quotas."
+    "Free API access is subject to "
+    "provider quotas and rate limits."
 )
