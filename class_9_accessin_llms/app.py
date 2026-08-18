@@ -1,7 +1,8 @@
 import os
 import io
+import base64
+import tempfile
 import wave
-from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -11,51 +12,33 @@ from google.genai import types
 
 from groq import Groq
 
+from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
 
-# =========================================================
-# 1. PAGE CONFIG
-# =========================================================
+
+# ============================================================
+# PAGE CONFIG
+# ============================================================
 
 st.set_page_config(
     page_title="Free Multimodal AI Playground",
     page_icon="✨",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 
-# =========================================================
-# 2. LOAD ENVIRONMENT VARIABLES
-# =========================================================
+# ============================================================
+# LOAD API KEYS
+# ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
+load_dotenv()
 
-env_path = PROJECT_ROOT / ".env"
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-load_dotenv(env_path, override=True)
-
-
-# ---------------------------------------------------------
-# Try Streamlit Cloud secrets first
-# Then local .env
-# ---------------------------------------------------------
-
-def get_secret(name):
-
-    try:
-        return st.secrets[name]
-    except Exception:
-        return os.getenv(name)
-
-
-GEMINI_API_KEY = get_secret("GOOGLE_API_KEY")
-GROQ_API_KEY = get_secret("GROQ_API_KEY")
-
-
-# =========================================================
-# 3. API CLIENTS
-# =========================================================
 
 gemini_client = None
 groq_client = None
@@ -73,226 +56,189 @@ if GROQ_API_KEY:
     )
 
 
-# =========================================================
-# 4. MODEL CONFIGURATION
-# =========================================================
+# ============================================================
+# MODELS
+# ============================================================
 
-# Text
 GEMINI_TEXT_MODEL = "gemini-3.5-flash-lite"
 
-# Vision
 GEMINI_VISION_MODEL = "gemini-3.6-flash"
 
-# TTS
 GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
 
-# Groq chat
 GROQ_TEXT_MODEL = "openai/gpt-oss-20b"
 
-# Speech-to-text
 GROQ_STT_MODEL = "whisper-large-v3-turbo"
 
 
-# =========================================================
-# 5. SESSION STATE
-# =========================================================
-
-if "gemini_messages" not in st.session_state:
-    st.session_state.gemini_messages = []
-
-
-if "groq_messages" not in st.session_state:
-    st.session_state.groq_messages = []
-
-
-if "previous_task" not in st.session_state:
-    st.session_state.previous_task = None
-
-
-if "previous_provider" not in st.session_state:
-    st.session_state.previous_provider = None
-
-
-# =========================================================
-# 6. CSS
-# =========================================================
+# ============================================================
+# CSS
+# ============================================================
 
 st.markdown(
     """
     <style>
 
+    /* Main background */
+
     .stApp {
         background:
             radial-gradient(
-                circle at 20% 0%,
-                rgba(30, 90, 200, 0.12),
-                transparent 30%
-            ),
-            radial-gradient(
-                circle at 90% 15%,
-                rgba(130, 50, 210, 0.12),
-                transparent 30%
+                circle at 80% 10%,
+                rgba(91, 33, 182, 0.15),
+                transparent 35%
             ),
             linear-gradient(
                 135deg,
-                #07101f,
-                #0b1020 50%,
-                #131025
+                #071426 0%,
+                #080d1b 55%,
+                #110c20 100%
             );
     }
 
 
-    .main .block-container {
-        max-width: 1250px;
-        padding-top: 2rem;
+    /* Main content */
+
+    .block-container {
+        max-width: 1450px;
+        padding-top: 3rem;
         padding-bottom: 7rem;
     }
 
+
+    /* Sidebar */
 
     section[data-testid="stSidebar"] {
         background:
             linear-gradient(
                 180deg,
-                rgba(12, 24, 48, 0.98),
-                rgba(7, 14, 29, 0.98)
+                #07162c 0%,
+                #081225 100%
             );
 
-        border-right:
-            1px solid rgba(120, 140, 255, 0.15);
+        border-right: 1px solid rgba(255,255,255,0.10);
     }
 
 
-    .title-text {
+    /* Headings */
 
-        font-size: 3rem;
-        font-weight: 800;
-
-        background:
-            linear-gradient(
-                90deg,
-                #ffb13b,
-                #ff6aa2,
-                #8d73ff
-            );
-
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-
-        margin-bottom: 0;
+    h1, h2, h3 {
+        color: #ffffff;
     }
 
 
-    .subtitle-text {
-        color: #9da8c5;
-        font-size: 1rem;
-        margin-bottom: 25px;
+    /* Caption */
+
+    .stCaption {
+        color: #8f9aad;
     }
 
+
+    /* Chat message */
 
     [data-testid="stChatMessage"] {
 
+        background:
+            linear-gradient(
+                135deg,
+                rgba(21, 32, 60, 0.72),
+                rgba(20, 17, 43, 0.75)
+            );
+
+        border: 1px solid rgba(103, 126, 234, 0.20);
+
         border-radius: 18px;
 
-        padding: 12px 16px;
-
-        margin-bottom: 12px;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(20, 30, 54, 0.94),
-                rgba(20, 20, 42, 0.94)
-            );
-
-        border:
-            1px solid rgba(130, 145, 255, 0.14);
-
-        box-shadow:
-            0 8px 25px rgba(0,0,0,0.18);
-    }
-
-
-    [data-testid="stChatInput"] {
-
-        border-radius: 18px !important;
-
-        border:
-            1px solid rgba(110, 100, 255, 0.45) !important;
-
-        background:
-            rgba(18, 22, 40, 0.96) !important;
-
-        box-shadow:
-            0 0 22px rgba(100, 70, 255, 0.08);
-    }
-
-
-    div.stButton > button {
-
-        border-radius: 14px;
-
-        border:
-            1px solid rgba(120, 130, 255, 0.20);
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(23, 34, 62, 0.95),
-                rgba(28, 25, 52, 0.95)
-            );
-
-        color: white;
-
-        transition: all 0.2s ease;
-    }
-
-
-    div.stButton > button:hover {
-
-        transform: translateY(-1px);
-
-        border-color:
-            rgba(120, 110, 255, 0.55);
-
-        box-shadow:
-            0 8px 22px rgba(90, 70, 200, 0.16);
-    }
-
-
-    .api-good {
-
-        padding: 12px;
-
-        border-radius: 10px;
-
-        background:
-            rgba(20, 130, 90, 0.26);
-
-        border:
-            1px solid rgba(60, 220, 150, 0.15);
-
-        color: #44f5a6;
+        padding: 10px;
 
         margin-bottom: 15px;
+
+        box-shadow:
+            0px 8px 25px rgba(0,0,0,0.15);
+
+        backdrop-filter: blur(12px);
     }
 
 
-    .model-card {
+    /* Inputs */
 
-        padding: 12px;
+    textarea,
+    input {
 
-        margin-bottom: 12px;
+        border-radius: 14px !important;
+    }
 
-        border-radius: 9px;
 
-        background:
-            rgba(255,255,255,0.05);
+    /* Buttons */
+
+    .stButton > button {
+
+        border-radius: 12px;
 
         border:
-            1px solid rgba(255,255,255,0.04);
+            1px solid rgba(
+                103,
+                126,
+                234,
+                0.35
+            );
 
-        font-family: monospace;
+        transition: 0.2s;
     }
+
+
+    .stButton > button:hover {
+
+        border-color: #7c83ff;
+
+        box-shadow:
+            0 0 15px
+            rgba(99,102,241,0.25);
+
+        transform: translateY(-1px);
+    }
+
+
+    /* File uploader */
+
+    [data-testid="stFileUploader"] {
+
+        border-radius: 16px;
+
+        padding: 8px;
+    }
+
+
+    /* Divider */
+
+    hr {
+        border-color:
+            rgba(255,255,255,0.12);
+    }
+
+
+    /* PDF status card */
+
+    .pdf-card {
+
+        padding: 18px;
+
+        border-radius: 16px;
+
+        background:
+            linear-gradient(
+                135deg,
+                rgba(30, 41, 70, 0.80),
+                rgba(25, 20, 48, 0.80)
+            );
+
+        border:
+            1px solid
+            rgba(99,102,241,0.25);
+
+        margin-bottom: 20px;
+    }
+
 
     </style>
     """,
@@ -300,171 +246,572 @@ st.markdown(
 )
 
 
-# =========================================================
-# 7. SIDEBAR
-# =========================================================
+# ============================================================
+# SESSION STATE
+# ============================================================
+
+if "text_messages" not in st.session_state:
+    st.session_state.text_messages = []
+
+
+if "pdf_messages" not in st.session_state:
+    st.session_state.pdf_messages = []
+
+
+if "pdf_chunks" not in st.session_state:
+    st.session_state.pdf_chunks = []
+
+
+if "pdf_index" not in st.session_state:
+    st.session_state.pdf_index = None
+
+
+if "pdf_name" not in st.session_state:
+    st.session_state.pdf_name = None
+
+
+# ============================================================
+# LOCAL EMBEDDING MODEL
+# ============================================================
+
+@st.cache_resource
+def load_embedding_model():
+
+    return SentenceTransformer(
+        "all-MiniLM-L6-v2"
+    )
+
+
+# ============================================================
+# PDF FUNCTIONS
+# ============================================================
+
+def extract_pdf_text(uploaded_file):
+
+    reader = PdfReader(uploaded_file)
+
+    pages = []
+
+    for page_number, page in enumerate(reader.pages):
+
+        text = page.extract_text()
+
+        if text:
+
+            pages.append(
+                {
+                    "page": page_number + 1,
+                    "text": text
+                }
+            )
+
+    return pages
+
+
+def split_text(
+    pages,
+    chunk_size=1200,
+    overlap=200
+):
+
+    chunks = []
+
+    for page in pages:
+
+        text = page["text"]
+
+        start = 0
+
+        while start < len(text):
+
+            end = start + chunk_size
+
+            chunk_text = text[start:end]
+
+            chunks.append(
+                {
+                    "page": page["page"],
+                    "text": chunk_text
+                }
+            )
+
+            start += chunk_size - overlap
+
+    return chunks
+
+
+def build_pdf_index(chunks):
+
+    embedding_model = load_embedding_model()
+
+    texts = [
+        chunk["text"]
+        for chunk in chunks
+    ]
+
+    embeddings = embedding_model.encode(
+        texts,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+        show_progress_bar=False
+    )
+
+    embeddings = np.asarray(
+        embeddings,
+        dtype="float32"
+    )
+
+    dimension = embeddings.shape[1]
+
+    index = faiss.IndexFlatIP(
+        dimension
+    )
+
+    index.add(
+        embeddings
+    )
+
+    return index
+
+
+def retrieve_pdf_chunks(
+    question,
+    top_k=5
+):
+
+    if st.session_state.pdf_index is None:
+        return []
+
+
+    embedding_model = load_embedding_model()
+
+    query_embedding = embedding_model.encode(
+        [question],
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+        show_progress_bar=False
+    )
+
+    query_embedding = np.asarray(
+        query_embedding,
+        dtype="float32"
+    )
+
+    scores, indices = (
+        st.session_state.pdf_index.search(
+            query_embedding,
+            top_k
+        )
+    )
+
+
+    results = []
+
+    for index in indices[0]:
+
+        if index == -1:
+            continue
+
+        results.append(
+            st.session_state.pdf_chunks[index]
+        )
+
+    return results
+
+
+# ============================================================
+# TEXT LLM
+# ============================================================
+
+def generate_groq_response(messages):
+
+    if groq_client is None:
+        raise RuntimeError(
+            "GROQ_API_KEY is missing."
+        )
+
+
+    response = groq_client.chat.completions.create(
+
+        model=GROQ_TEXT_MODEL,
+
+        messages=messages,
+
+        temperature=0.4,
+
+        max_tokens=2000
+    )
+
+
+    return response.choices[0].message.content
+
+
+def generate_gemini_response(messages):
+
+    if gemini_client is None:
+        raise RuntimeError(
+            "GEMINI_API_KEY is missing."
+        )
+
+
+    conversation = ""
+
+    for message in messages:
+
+        conversation += (
+            f"{message['role']}: "
+            f"{message['content']}\n"
+        )
+
+
+    response = gemini_client.models.generate_content(
+
+        model=GEMINI_TEXT_MODEL,
+
+        contents=conversation
+    )
+
+
+    return response.text
+
+
+# ============================================================
+# PDF QUESTION ANSWERING
+# ============================================================
+
+def answer_pdf_question(
+    question,
+    provider
+):
+
+    relevant_chunks = retrieve_pdf_chunks(
+        question,
+        top_k=5
+    )
+
+
+    if not relevant_chunks:
+
+        return (
+            "I could not find relevant "
+            "content in the uploaded PDF."
+        )
+
+
+    context_parts = []
+
+    for chunk in relevant_chunks:
+
+        context_parts.append(
+
+            f"[Page {chunk['page']}]\n"
+            f"{chunk['text']}"
+
+        )
+
+
+    context = "\n\n".join(
+        context_parts
+    )
+
+
+    prompt = f"""
+You are answering questions about an uploaded PDF.
+
+Use ONLY the provided PDF context.
+
+If the answer cannot be found in the context, say:
+
+"I could not find that information in the uploaded PDF."
+
+Do not invent information.
+
+When possible, mention the page number where the information came from.
+
+PDF CONTEXT:
+
+{context}
+
+
+USER QUESTION:
+
+{question}
+
+
+ANSWER:
+"""
+
+
+    if provider == "Groq":
+
+        messages = [
+
+            {
+                "role": "system",
+                "content":
+                    "Answer questions using only "
+                    "the supplied PDF context."
+            },
+
+            {
+                "role": "user",
+                "content": prompt
+            }
+
+        ]
+
+
+        return generate_groq_response(
+            messages
+        )
+
+
+    else:
+
+        response = gemini_client.models.generate_content(
+
+            model=GEMINI_TEXT_MODEL,
+
+            contents=prompt
+        )
+
+        return response.text
+
+
+# ============================================================
+# IMAGE → TEXT
+# ============================================================
+
+def describe_image(
+    uploaded_image,
+    prompt
+):
+
+    image_bytes = uploaded_image.getvalue()
+
+
+    response = gemini_client.models.generate_content(
+
+        model=GEMINI_VISION_MODEL,
+
+        contents=[
+
+            prompt,
+
+            types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=uploaded_image.type
+            )
+
+        ]
+    )
+
+
+    return response.text
+
+
+# ============================================================
+# AUDIO → TEXT
+# ============================================================
+
+def transcribe_audio(
+    uploaded_audio
+):
+
+    suffix = ".wav"
+
+    if uploaded_audio.name:
+
+        extension = os.path.splitext(
+            uploaded_audio.name
+        )[1]
+
+        if extension:
+            suffix = extension
+
+
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=suffix
+    ) as temp_file:
+
+        temp_file.write(
+            uploaded_audio.getvalue()
+        )
+
+        temp_path = temp_file.name
+
+
+    try:
+
+        with open(
+            temp_path,
+            "rb"
+        ) as audio_file:
+
+            transcription = (
+                groq_client.audio.transcriptions.create(
+
+                    file=audio_file,
+
+                    model=GROQ_STT_MODEL,
+
+                    response_format="text"
+                )
+            )
+
+
+        return transcription
+
+
+    finally:
+
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 
 with st.sidebar:
 
-    st.markdown("## API Status")
+    st.header(
+        "API Status"
+    )
 
 
     if GEMINI_API_KEY:
 
-        st.markdown(
-            '<div class="api-good">'
-            'Google Gemini API connected'
-            '</div>',
-            unsafe_allow_html=True
+        st.success(
+            "Google Gemini API connected"
         )
 
     else:
 
         st.error(
-            "Gemini API key missing"
+            "Gemini API not connected"
         )
 
 
     if GROQ_API_KEY:
 
-        st.markdown(
-            '<div class="api-good">'
-            'Groq API connected'
-            '</div>',
-            unsafe_allow_html=True
+        st.success(
+            "Groq API connected"
         )
 
     else:
 
         st.error(
-            "Groq API key missing"
+            "Groq API not connected"
         )
 
 
-    st.markdown("---")
+    st.divider()
 
 
-    st.markdown(
-        "### Available models"
+    st.subheader(
+        "Available models"
     )
 
 
-    st.markdown(
+    st.write(
         "**Gemini text:**"
     )
 
-    st.markdown(
-        f'<div class="model-card">'
-        f'{GEMINI_TEXT_MODEL}'
-        f'</div>',
-        unsafe_allow_html=True
+    st.code(
+        GEMINI_TEXT_MODEL
     )
 
 
-    st.markdown(
+    st.write(
         "**Gemini vision:**"
     )
 
-    st.markdown(
-        f'<div class="model-card">'
-        f'{GEMINI_VISION_MODEL}'
-        f'</div>',
-        unsafe_allow_html=True
+    st.code(
+        GEMINI_VISION_MODEL
     )
 
 
-    st.markdown(
+    st.write(
         "**Groq text:**"
     )
 
-    st.markdown(
-        f'<div class="model-card">'
-        f'{GROQ_TEXT_MODEL}'
-        f'</div>',
-        unsafe_allow_html=True
+    st.code(
+        GROQ_TEXT_MODEL
     )
 
 
-    st.markdown(
+    st.write(
         "**Groq speech-to-text:**"
     )
 
-    st.markdown(
-        f'<div class="model-card">'
-        f'{GROQ_STT_MODEL}'
-        f'</div>',
-        unsafe_allow_html=True
+    st.code(
+        GROQ_STT_MODEL
     )
 
 
-    st.markdown(
+    st.write(
         "**Gemini TTS:**"
     )
 
-    st.markdown(
-        f'<div class="model-card">'
-        f'{GEMINI_TTS_MODEL}'
-        f'</div>',
-        unsafe_allow_html=True
+    st.code(
+        GEMINI_TTS_MODEL
     )
 
 
-    st.markdown("---")
+    st.divider()
 
 
-    if st.button(
-        "🗑️ Clear conversation",
-        use_container_width=True
-    ):
+    st.write(
+        "**PDF embeddings:**"
+    )
 
-        st.session_state.gemini_messages = []
-        st.session_state.groq_messages = []
-
-        st.rerun()
+    st.code(
+        "all-MiniLM-L6-v2"
+    )
 
 
-# =========================================================
-# 8. PAGE TITLE
-# =========================================================
+# ============================================================
+# HEADER
+# ============================================================
 
 st.markdown(
-    '<p class="title-text">'
-    '✨ Free Multimodal AI Playground'
-    '</p>',
-    unsafe_allow_html=True
+    "## ✨ Free Multimodal AI Playground"
 )
 
-st.markdown(
-    '<p class="subtitle-text">'
-    'Gemini + Groq | Text, Image and Audio'
-    '</p>',
-    unsafe_allow_html=True
+st.caption(
+    "Gemini + Groq | Text, Image, Audio and PDF"
 )
 
 
-# =========================================================
-# 9. TASK SELECTION
-# =========================================================
+# ============================================================
+# TASK SELECTOR
+# ============================================================
 
 task = st.selectbox(
+
     "Choose task",
+
     [
         "Text → Text",
         "Image → Text",
         "Audio → Text",
-        "Text → Audio"
+        "PDF → Chat"
     ]
 )
 
 
-# =========================================================
-# 10. TEXT → TEXT
-# =========================================================
+# ============================================================
+# TEXT → TEXT
+# ============================================================
 
 if task == "Text → Text":
 
     provider = st.selectbox(
+
         "Provider",
+
         [
             "Groq",
             "Gemini"
@@ -472,42 +819,8 @@ if task == "Text → Text":
     )
 
 
-    # -----------------------------------------------------
-    # Detect provider switch
-    # -----------------------------------------------------
-
-    if (
-        st.session_state.previous_provider is not None
-        and
-        st.session_state.previous_provider != provider
-    ):
-
-        # Keep histories separate
-        pass
-
-
-    st.session_state.previous_provider = provider
-
-
-    # -----------------------------------------------------
-    # Choose correct history
-    # -----------------------------------------------------
-
-    if provider == "Gemini":
-
-        messages = st.session_state.gemini_messages
-
-    else:
-
-        messages = st.session_state.groq_messages
-
-
-    # -----------------------------------------------------
-    # Small controls
-    # -----------------------------------------------------
-
     col1, col2 = st.columns(
-        [6, 1]
+        [8, 1]
     )
 
 
@@ -522,33 +835,18 @@ if task == "Text → Text":
 
         if st.button(
             "Clear",
-            key=f"clear_{provider}"
+            key="clear_text"
         ):
 
-            if provider == "Gemini":
-                st.session_state.gemini_messages = []
-
-            else:
-                st.session_state.groq_messages = []
+            st.session_state.text_messages = []
 
             st.rerun()
 
 
-    # -----------------------------------------------------
-    # Display conversation history
-    # -----------------------------------------------------
-
-    for message in messages:
-
-        avatar = (
-            "🧑"
-            if message["role"] == "user"
-            else "✨"
-        )
+    for message in st.session_state.text_messages:
 
         with st.chat_message(
-            message["role"],
-            avatar=avatar
+            message["role"]
         ):
 
             st.markdown(
@@ -556,277 +854,115 @@ if task == "Text → Text":
             )
 
 
-    # -----------------------------------------------------
-    # Chat input
-    # -----------------------------------------------------
-
     prompt = st.chat_input(
-        f"Message {provider}..."
+        f"Message {provider}...",
+        key="text_chat"
     )
 
 
     if prompt:
 
-        # ---------------------------------------------
-        # Save user message
-        # ---------------------------------------------
+        st.session_state.text_messages.append(
 
-        messages.append(
             {
                 "role": "user",
                 "content": prompt
             }
+
         )
 
 
         with st.chat_message(
-            "user",
-            avatar="🧑"
+            "user"
         ):
 
-            st.markdown(prompt)
+            st.markdown(
+                prompt
+            )
 
 
-        # =============================================
-        # GEMINI CHAT
-        # =============================================
+        try:
 
-        if provider == "Gemini":
+            with st.chat_message(
+                "assistant"
+            ):
 
-            if not gemini_client:
-
-                st.error(
-                    "Gemini API is not configured."
-                )
-
-            else:
-
-                with st.chat_message(
-                    "assistant",
-                    avatar="✨"
+                with st.spinner(
+                    "Thinking..."
                 ):
 
-                    placeholder = st.empty()
+                    if provider == "Groq":
 
-                    full_response = ""
+                        response = generate_groq_response(
+                            st.session_state.text_messages
+                        )
 
-                    try:
+                    else:
 
-                        conversation = []
-
-                        for msg in messages:
-
-                            role = (
-                                "user"
-                                if msg["role"] == "user"
-                                else "model"
-                            )
-
-                            conversation.append(
-                                {
-                                    "role": role,
-                                    "parts": [
-                                        {
-                                            "text":
-                                            msg["content"]
-                                        }
-                                    ]
-                                }
-                            )
-
-
-                        stream = (
-                            gemini_client
-                            .models
-                            .generate_content_stream(
-                                model=
-                                GEMINI_TEXT_MODEL,
-
-                                contents=
-                                conversation
-                            )
+                        response = generate_gemini_response(
+                            st.session_state.text_messages
                         )
 
 
-                        for chunk in stream:
-
-                            if chunk.text:
-
-                                full_response += (
-                                    chunk.text
-                                )
-
-                                placeholder.markdown(
-                                    full_response
-                                    + "▌"
-                                )
-
-
-                        placeholder.markdown(
-                            full_response
-                        )
-
-
-                        messages.append(
-                            {
-                                "role":
-                                "assistant",
-
-                                "content":
-                                full_response
-                            }
-                        )
-
-
-                    except Exception as e:
-
-                        placeholder.error(
-                            str(e)
-                        )
-
-
-        # =============================================
-        # GROQ CHAT
-        # =============================================
-
-        else:
-
-            if not groq_client:
-
-                st.error(
-                    "Groq API is not configured."
+                st.markdown(
+                    response
                 )
 
-            else:
 
-                with st.chat_message(
-                    "assistant",
-                    avatar="✨"
-                ):
+            st.session_state.text_messages.append(
 
-                    placeholder = st.empty()
+                {
+                    "role": "assistant",
+                    "content": response
+                }
 
-                    full_response = ""
-
-                    try:
-
-                        groq_messages = [
-                            {
-                                "role":
-                                msg["role"],
-
-                                "content":
-                                msg["content"]
-                            }
-
-                            for msg in messages
-                        ]
+            )
 
 
-                        stream = (
-                            groq_client
-                            .chat
-                            .completions
-                            .create(
-                                model=
-                                GROQ_TEXT_MODEL,
+        except Exception as e:
 
-                                messages=
-                                groq_messages,
-
-                                stream=True
-                            )
-                        )
+            st.error(
+                str(e)
+            )
 
 
-                        for chunk in stream:
-
-                            content = (
-                                chunk
-                                .choices[0]
-                                .delta
-                                .content
-                            )
-
-
-                            if content:
-
-                                full_response += (
-                                    content
-                                )
-
-                                placeholder.markdown(
-                                    full_response
-                                    + "▌"
-                                )
-
-
-                        placeholder.markdown(
-                            full_response
-                        )
-
-
-                        messages.append(
-                            {
-                                "role":
-                                "assistant",
-
-                                "content":
-                                full_response
-                            }
-                        )
-
-
-                    except Exception as e:
-
-                        placeholder.error(
-                            str(e)
-                        )
-
-
-# =========================================================
-# 11. IMAGE → TEXT
-# =========================================================
+# ============================================================
+# IMAGE → TEXT
+# ============================================================
 
 elif task == "Image → Text":
 
     st.subheader(
-        "🖼️ Image → Text"
+        "🖼️ Image Understanding"
     )
 
 
-    if not gemini_client:
+    image_file = st.file_uploader(
 
-        st.error(
-            "Gemini API is not configured."
-        )
-
-        st.stop()
-
-
-    uploaded_image = st.file_uploader(
         "Upload an image",
+
         type=[
-            "png",
             "jpg",
             "jpeg",
+            "png",
             "webp"
         ]
     )
 
 
     image_prompt = st.text_area(
-        "What do you want to know about the image?",
+
+        "What should Gemini do?",
+
         value="Describe this image in detail."
     )
 
 
-    if uploaded_image:
+    if image_file:
 
         st.image(
-            uploaded_image,
-            caption="Uploaded image",
-            use_container_width=True
+            image_file,
+            width=500
         )
 
 
@@ -835,82 +971,62 @@ elif task == "Image → Text":
             use_container_width=True
         ):
 
-            try:
-
-                image_bytes = (
-                    uploaded_image.getvalue()
-                )
-
-
-                mime_type = (
-                    uploaded_image.type
-                )
-
-
-                response = (
-                    gemini_client
-                    .models
-                    .generate_content(
-                        model=
-                        GEMINI_VISION_MODEL,
-
-                        contents=[
-                            image_prompt,
-
-                            types.Part.from_bytes(
-                                data=image_bytes,
-                                mime_type=mime_type
-                            )
-                        ]
-                    )
-                )
-
-
-                st.markdown(
-                    "### Response"
-                )
-
-                st.markdown(
-                    response.text
-                )
-
-
-            except Exception as e:
+            if gemini_client is None:
 
                 st.error(
-                    str(e)
+                    "Gemini API is not configured."
                 )
 
+            else:
 
-# =========================================================
-# 12. AUDIO → TEXT
-# =========================================================
+                try:
+
+                    with st.spinner(
+                        "Analyzing image..."
+                    ):
+
+                        response = describe_image(
+                            image_file,
+                            image_prompt
+                        )
+
+
+                    st.markdown(
+                        "### Response"
+                    )
+
+                    st.markdown(
+                        response
+                    )
+
+
+                except Exception as e:
+
+                    st.error(
+                        str(e)
+                    )
+
+
+# ============================================================
+# AUDIO → TEXT
+# ============================================================
 
 elif task == "Audio → Text":
 
     st.subheader(
-        "🎙️ Audio → Text"
+        "🎤 Speech to Text"
     )
 
 
-    if not groq_client:
-
-        st.error(
-            "Groq API is not configured."
-        )
-
-        st.stop()
-
-
     audio_file = st.file_uploader(
-        "Upload an audio file",
+
+        "Upload audio",
+
         type=[
             "wav",
             "mp3",
             "m4a",
-            "ogg",
-            "webm",
-            "flac"
+            "ogg"
         ]
     )
 
@@ -927,183 +1043,270 @@ elif task == "Audio → Text":
             use_container_width=True
         ):
 
-            try:
-
-                audio_bytes = (
-                    audio_file.getvalue()
-                )
-
-
-                transcription = (
-                    groq_client
-                    .audio
-                    .transcriptions
-                    .create(
-                        file=(
-                            audio_file.name,
-                            audio_bytes
-                        ),
-
-                        model=
-                        GROQ_STT_MODEL
-                    )
-                )
-
-
-                st.markdown(
-                    "### Transcription"
-                )
-
-                st.write(
-                    transcription.text
-                )
-
-
-            except Exception as e:
+            if groq_client is None:
 
                 st.error(
-                    str(e)
+                    "Groq API is not configured."
                 )
 
+            else:
 
-# =========================================================
-# 13. TEXT → AUDIO
-# =========================================================
+                try:
 
-elif task == "Text → Audio":
+                    with st.spinner(
+                        "Transcribing..."
+                    ):
+
+                        transcription = transcribe_audio(
+                            audio_file
+                        )
+
+
+                    st.markdown(
+                        "### Transcription"
+                    )
+
+                    st.write(
+                        transcription
+                    )
+
+
+                except Exception as e:
+
+                    st.error(
+                        str(e)
+                    )
+
+
+# ============================================================
+# PDF → CHAT
+# ============================================================
+
+elif task == "PDF → Chat":
 
     st.subheader(
-        "🔊 Text → Audio"
+        "📄 Chat with your PDF"
     )
 
 
-    if not gemini_client:
-
-        st.error(
-            "Gemini API is not configured."
-        )
-
-        st.stop()
-
-
-    tts_text = st.text_area(
-        "Enter text",
-        placeholder=(
-            "Type something you want "
-            "Gemini to speak..."
-        )
+    st.caption(
+        "Upload a PDF, then ask questions about its content."
     )
 
 
-    voice = st.selectbox(
-        "Voice",
+    provider = st.selectbox(
+
+        "Answer using",
+
         [
-            "Kore",
-            "Leda"
-        ]
+            "Groq",
+            "Gemini"
+        ],
+
+        key="pdf_provider"
     )
 
 
-    if st.button(
-        "Generate speech",
-        use_container_width=True
-    ):
+    uploaded_pdf = st.file_uploader(
 
-        if not tts_text.strip():
+        "Upload PDF",
 
-            st.warning(
-                "Enter some text first."
-            )
+        type=["pdf"],
 
-        else:
+        key="pdf_upload"
+    )
+
+
+    # --------------------------------------------------------
+    # PROCESS PDF
+    # --------------------------------------------------------
+
+    if uploaded_pdf is not None:
+
+        current_pdf = (
+            uploaded_pdf.name
+        )
+
+
+        if (
+            st.session_state.pdf_name
+            != current_pdf
+        ):
 
             try:
 
-                response = (
-                    gemini_client
-                    .models
-                    .generate_content(
-                        model=
-                        GEMINI_TTS_MODEL,
+                with st.spinner(
+                    "Reading and indexing PDF..."
+                ):
 
-                        contents=
-                        tts_text,
+                    pages = extract_pdf_text(
+                        uploaded_pdf
+                    )
 
-                        config=
-                        types.GenerateContentConfig(
-                            response_modalities=[
-                                "AUDIO"
-                            ],
 
-                            speech_config=
-                            types.SpeechConfig(
+                    if not pages:
 
-                                voice_config=
-                                types.VoiceConfig(
-
-                                    prebuilt_voice_config=
-                                    types
-                                    .PrebuiltVoiceConfig(
-                                        voice_name=
-                                        voice
-                                    )
-                                )
-                            )
+                        st.error(
+                            "No extractable text "
+                            "was found in this PDF."
                         )
-                    )
-                )
+
+                        st.stop()
 
 
-                audio_data = (
-                    response
-                    .candidates[0]
-                    .content
-                    .parts[0]
-                    .inline_data
-                    .data
-                )
-
-
-                # -------------------------------------
-                # Convert raw PCM to WAV
-                # -------------------------------------
-
-                wav_buffer = io.BytesIO()
-
-
-                with wave.open(
-                    wav_buffer,
-                    "wb"
-                ) as wav_file:
-
-                    wav_file.setnchannels(1)
-
-                    wav_file.setsampwidth(2)
-
-                    wav_file.setframerate(
-                        24000
-                    )
-
-                    wav_file.writeframes(
-                        audio_data
+                    chunks = split_text(
+                        pages
                     )
 
 
-                wav_buffer.seek(0)
+                    index = build_pdf_index(
+                        chunks
+                    )
 
 
-                st.audio(
-                    wav_buffer,
-                    format="audio/wav"
+                    st.session_state.pdf_chunks = (
+                        chunks
+                    )
+
+                    st.session_state.pdf_index = (
+                        index
+                    )
+
+                    st.session_state.pdf_name = (
+                        current_pdf
+                    )
+
+                    st.session_state.pdf_messages = []
+
+
+            except Exception as e:
+
+                st.error(
+                    f"Could not process PDF: {e}"
+                )
+
+                st.stop()
+
+
+        st.markdown(
+
+            f"""
+            <div class="pdf-card">
+
+            <b>📄 PDF loaded</b><br><br>
+
+            File: {st.session_state.pdf_name}<br>
+
+            Chunks indexed:
+            {len(st.session_state.pdf_chunks)}
+
+            </div>
+            """,
+
+            unsafe_allow_html=True
+        )
+
+
+        col1, col2 = st.columns(
+            [8, 1]
+        )
+
+
+        with col1:
+
+            st.caption(
+                f"Ask questions using {provider}"
+            )
+
+
+        with col2:
+
+            if st.button(
+                "Clear",
+                key="clear_pdf"
+            ):
+
+                st.session_state.pdf_messages = []
+
+                st.rerun()
+
+
+        # ----------------------------------------------------
+        # SHOW PDF CONVERSATION
+        # ----------------------------------------------------
+
+        for message in st.session_state.pdf_messages:
+
+            with st.chat_message(
+                message["role"]
+            ):
+
+                st.markdown(
+                    message["content"]
                 )
 
 
-                st.download_button(
-                    "Download audio",
-                    data=wav_buffer,
-                    file_name=
-                    "generated_speech.wav",
-                    mime="audio/wav"
+        # ----------------------------------------------------
+        # PDF CHAT INPUT
+        # ----------------------------------------------------
+
+        pdf_question = st.chat_input(
+
+            "Ask something about the PDF...",
+
+            key="pdf_chat"
+        )
+
+
+        if pdf_question:
+
+            st.session_state.pdf_messages.append(
+
+                {
+                    "role": "user",
+                    "content": pdf_question
+                }
+
+            )
+
+
+            with st.chat_message(
+                "user"
+            ):
+
+                st.markdown(
+                    pdf_question
+                )
+
+
+            try:
+
+                with st.chat_message(
+                    "assistant"
+                ):
+
+                    with st.spinner(
+                        "Searching PDF..."
+                    ):
+
+                        answer = answer_pdf_question(
+                            pdf_question,
+                            provider
+                        )
+
+
+                    st.markdown(
+                        answer
+                    )
+
+
+                st.session_state.pdf_messages.append(
+
+                    {
+                        "role": "assistant",
+                        "content": answer
+                    }
+
                 )
 
 
@@ -1114,13 +1317,19 @@ elif task == "Text → Audio":
                 )
 
 
-# =========================================================
-# 14. FOOTER
-# =========================================================
+    else:
 
-st.markdown("---")
+        st.info(
+            "Upload a PDF to start chatting with it."
+        )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.divider()
 
 st.caption(
-    "Free API access is subject to provider quotas "
-    "and rate limits."
+    "Free API access is subject to provider quotas and rate limits."
 )
