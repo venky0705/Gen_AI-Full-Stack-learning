@@ -1,549 +1,492 @@
-import os
-from pathlib import Path
-
-import streamlit as st
-from dotenv import load_dotenv
-from google import genai
-
-
-# =========================================================
-# 1. LOAD .ENV
-# =========================================================
-
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
-ENV_PATH = PROJECT_ROOT / ".env"
-
-load_dotenv(ENV_PATH, override=True)
-
-API_KEY = os.getenv("GOOGLE_API_KEY")
-
-if not API_KEY:
-    st.error("GEMINI_API_KEY not found in .env file.")
-    st.stop()
-
-
-# =========================================================
-# 2. GEMINI CLIENT
-# =========================================================
-
-client = genai.Client(api_key=API_KEY)
-
-MODEL_NAME = "gemini-3.1-flash-lite"
-
-
-# =========================================================
-# 3. PAGE CONFIG
-# =========================================================
-
-st.set_page_config(
-    page_title="Gemini Local Chat",
-    page_icon="✨",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-
-# =========================================================
-# 4. CUSTOM CSS
-# =========================================================
-
-st.markdown(
-    """
-    <style>
-
-    .stApp {
-        background:
-            radial-gradient(
-                circle at 18% 10%,
-                rgba(0, 120, 255, 0.12),
-                transparent 28%
-            ),
-            radial-gradient(
-                circle at 82% 18%,
-                rgba(175, 70, 255, 0.14),
-                transparent 28%
-            ),
-            linear-gradient(
-                135deg,
-                #070b14 0%,
-                #0b1020 45%,
-                #11101f 100%
-            );
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "f5ec17be",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2026-08-17 15:38:11.752 WARNING streamlit.runtime.scriptrunner_utils.script_run_context: Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:12.858 \n",
+      "  \u001b[33m\u001b[1mWarning:\u001b[0m to view this Streamlit app on a browser, run it with the following\n",
+      "  command:\n",
+      "\n",
+      "    streamlit run c:\\Users\\ASUS\\Desktop\\Gen AI Full stak\\env\\Lib\\site-packages\\ipykernel_launcher.py [ARGUMENTS]\n",
+      "2026-08-17 15:38:12.858 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:12.860 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:12.862 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.367 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.370 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.371 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.372 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.373 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.375 Session state does not function when running a script without `streamlit run`\n",
+      "2026-08-17 15:38:13.375 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.375 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.378 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.378 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.378 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.381 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.381 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.381 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.385 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.389 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.391 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.392 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.392 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.394 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.395 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.396 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.399 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.401 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.401 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.404 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.405 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.405 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.410 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.412 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.412 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.412 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.415 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.416 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.416 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.417 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.418 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.419 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.421 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.422 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.423 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.425 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.426 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.427 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.429 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.429 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.430 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.430 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.432 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.433 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.434 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.437 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.441 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.445 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.446 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.447 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.450 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.450 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.452 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.452 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.452 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.454 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.454 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.457 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.457 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.458 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.461 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.462 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.463 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.464 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.466 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.467 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.468 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.468 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.470 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.471 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.471 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.473 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.474 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.475 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.475 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.477 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.478 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.478 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.479 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.480 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.481 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.482 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n",
+      "2026-08-17 15:38:13.483 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.\n"
+     ]
     }
-
-    .main .block-container {
-        max-width: 1100px;
-        padding-top: 1.5rem;
-        padding-bottom: 7rem;
-    }
-
-    section[data-testid="stSidebar"] {
-        background:
-            linear-gradient(
-                180deg,
-                rgba(16, 24, 45, 0.97),
-                rgba(8, 13, 26, 0.98)
-            );
-
-        border-right:
-            1px solid rgba(130, 150, 255, 0.15);
-
-        backdrop-filter: blur(20px);
-    }
-
-    .gemini-title {
-        text-align: center;
-        font-size: 3.2rem;
-        font-weight: 800;
-        margin-top: 10px;
-        margin-bottom: 6px;
-
-        background:
-            linear-gradient(
-                90deg,
-                #38a5ff,
-                #7477ff,
-                #c35cff
-            );
-
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-
-        text-shadow:
-            0 0 30px rgba(100, 100, 255, 0.18);
-    }
-
-    .gemini-subtitle {
-        text-align: center;
-        font-size: 1.05rem;
-        color: #aeb6d4;
-        margin-bottom: 15px;
-    }
-
-    .gradient-line {
-        width: 90px;
-        height: 4px;
-        margin: auto;
-        margin-bottom: 35px;
-
-        border-radius: 50px;
-
-        background:
-            linear-gradient(
-                90deg,
-                #38a5ff,
-                #8d68ff,
-                #db54ff
-            );
-
-        box-shadow:
-            0 0 18px rgba(130, 90, 255, 0.65);
-    }
-
-    [data-testid="stChatMessage"] {
-        border-radius: 20px;
-        padding: 14px 18px;
-        margin-bottom: 14px;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(18, 28, 50, 0.92),
-                rgba(18, 20, 38, 0.92)
-            );
-
-        border:
-            1px solid rgba(120, 145, 255, 0.16);
-
-        box-shadow:
-            0 8px 28px rgba(0, 0, 0, 0.20),
-            inset 0 1px 0 rgba(255,255,255,0.03);
-
-        backdrop-filter: blur(18px);
-    }
-
-    [data-testid="stChatInput"] {
-        border-radius: 18px !important;
-
-        border:
-            1px solid rgba(110, 120, 255, 0.55) !important;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(20, 25, 44, 0.98),
-                rgba(28, 23, 45, 0.98)
-            ) !important;
-
-        box-shadow:
-            0 0 28px rgba(100, 70, 255, 0.12),
-            inset 0 1px 0 rgba(255,255,255,0.03);
-    }
-
-    div.stButton > button {
-        min-height: 52px;
-        border-radius: 16px;
-
-        border:
-            1px solid rgba(120, 145, 255, 0.20);
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(20, 30, 55, 0.92),
-                rgba(22, 22, 45, 0.92)
-            );
-
-        color: white;
-
-        transition:
-            transform 0.2s ease,
-            box-shadow 0.2s ease,
-            border-color 0.2s ease;
-
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.03);
-    }
-
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-
-        border-color:
-            rgba(130, 120, 255, 0.60);
-
-        box-shadow:
-            0 10px 30px rgba(80, 70, 200, 0.22),
-            0 0 18px rgba(110, 80, 255, 0.18);
-    }
-
-    .status-card {
-        padding: 14px;
-        border-radius: 16px;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(0, 120, 90, 0.20),
-                rgba(0, 70, 65, 0.25)
-            );
-
-        border:
-            1px solid rgba(50, 220, 170, 0.25);
-
-        color: #72f7c3;
-
-        font-size: 0.95rem;
-    }
-
-    .power-card {
-        margin-top: 25px;
-        padding: 22px;
-
-        text-align: center;
-
-        border-radius: 20px;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(90, 40, 150, 0.20),
-                rgba(20, 60, 130, 0.18)
-            );
-
-        border:
-            1px solid rgba(140, 100, 255, 0.35);
-
-        box-shadow:
-            0 0 30px rgba(110, 70, 255, 0.10);
-    }
-
-    .power-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-
-        background:
-            linear-gradient(
-                90deg,
-                #8f7cff,
-                #d36cff
-            );
-
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    footer {
-        visibility: hidden;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# =========================================================
-# 5. SESSION STATE
-# =========================================================
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "pending_prompt" not in st.session_state:
-    st.session_state.pending_prompt = None
-
-
-# =========================================================
-# 6. SIDEBAR
-# =========================================================
-
-with st.sidebar:
-
-    st.markdown("## ✨ Gemini Chat")
-    st.caption("Local AI chatbot")
-
-    st.markdown("---")
-
-    st.markdown("### Model")
-    st.code(MODEL_NAME)
-
-    st.markdown("---")
-
-    st.markdown("### Conversation")
-
-    if st.button(
-        "🗑️ Clear Chat",
-        use_container_width=True
-    ):
-        st.session_state.messages = []
-        st.session_state.pending_prompt = None
-        st.rerun()
-
-    st.markdown("---")
-
-    st.write(
-        f"Messages: {len(st.session_state.messages)}"
-    )
-
-    st.markdown(
-        '<div class="status-card">● Gemini API connected<br>'
-        '<span style="opacity:0.7;font-size:0.85rem;">'
-        'All systems operational'
-        '</span></div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<div class="power-card">'
-        '<div style="font-size:2rem;">💎</div>'
-        '<div class="power-title">Gemini Power</div>'
-        '<br>'
-        '<div style="opacity:0.7;font-size:0.85rem;">'
-        'Fast. Smart. Local UI.'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-
-# =========================================================
-# 7. HEADER
-# =========================================================
-
-st.markdown(
-    '<p class="gemini-title">✦ Gemini Local</p>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<p class="gemini-subtitle">'
-    'Your local AI assistant powered by Gemini'
-    '</p>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="gradient-line"></div>',
-    unsafe_allow_html=True
-)
-
-
-# =========================================================
-# 8. SUGGESTION BUTTONS
-# =========================================================
-
-if len(st.session_state.messages) == 0:
-
-    st.markdown("## ✨ How can I help you today?")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        if st.button(
-            "🧠 Explain Transformers",
-            use_container_width=True
-        ):
-            st.session_state.pending_prompt = (
-                "Explain Transformer architecture "
-                "in a simple and understandable way."
-            )
-            st.rerun()
-
-        if st.button(
-            "📚 Explain RAG",
-            use_container_width=True
-        ):
-            st.session_state.pending_prompt = (
-                "Explain Retrieval Augmented Generation "
-                "with a simple example."
-            )
-            st.rerun()
-
-    with col2:
-
-        if st.button(
-            "🎓 Explain LLM Training",
-            use_container_width=True
-        ):
-            st.session_state.pending_prompt = (
-                "Explain how modern LLMs are trained."
-            )
-            st.rerun()
-
-        if st.button(
-            "💻 Generate Python Code",
-            use_container_width=True
-        ):
-            st.session_state.pending_prompt = (
-                "Give me a useful Python project "
-                "for learning Generative AI."
-            )
-            st.rerun()
-
-
-# =========================================================
-# 9. DISPLAY CHAT HISTORY
-# =========================================================
-
-for message in st.session_state.messages:
-
-    avatar = (
-        "🧑"
-        if message["role"] == "user"
-        else "✨"
-    )
-
-    with st.chat_message(
-        message["role"],
-        avatar=avatar
-    ):
-        st.markdown(message["content"])
-
-
-# =========================================================
-# 10. USER INPUT
-# =========================================================
-
-user_prompt = st.chat_input(
-    "Ask Gemini anything..."
-)
-
-if st.session_state.pending_prompt:
-    user_prompt = st.session_state.pending_prompt
-    st.session_state.pending_prompt = None
-
-
-# =========================================================
-# 11. HANDLE CHAT
-# =========================================================
-
-if user_prompt:
-
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": user_prompt
-        }
-    )
-
-    with st.chat_message(
-        "user",
-        avatar="🧑"
-    ):
-        st.markdown(user_prompt)
-
-
-    # Build full conversation history
-    conversation = []
-
-    for msg in st.session_state.messages:
-
-        role = (
-            "user"
-            if msg["role"] == "user"
-            else "model"
-        )
-
-        conversation.append(
-            {
-                "role": role,
-                "parts": [
-                    {
-                        "text": msg["content"]
-                    }
-                ]
-            }
-        )
-
-
-    # Generate Gemini response
-    with st.chat_message(
-        "assistant",
-        avatar="✨"
-    ):
-
-        placeholder = st.empty()
-
-        full_response = ""
-
-        try:
-
-            stream = client.models.generate_content_stream(
-                model=MODEL_NAME,
-                contents=conversation
-            )
-
-            for chunk in stream:
-
-                if chunk.text:
-                    full_response += chunk.text
-
-                    placeholder.markdown(
-                        full_response + "▌"
-                    )
-
-            placeholder.markdown(
-                full_response
-            )
-
-        except Exception as e:
-
-            full_response = (
-                "There was an error communicating "
-                "with Gemini.\n\n"
-                f"{e}"
-            )
-
-            placeholder.error(
-                full_response
-            )
-
-
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": full_response
-        }
-    )
+   ],
+   "source": [
+    "import os\n",
+    "import streamlit as st\n",
+    "from dotenv import load_dotenv\n",
+    "from google import genai\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Load API key\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "load_dotenv()\n",
+    "\n",
+    "API_KEY = os.getenv(\"GEMINI_API_KEY\")\n",
+    "\n",
+    "if not API_KEY:\n",
+    "    st.error(\"GEMINI_API_KEY not found in .env file.\")\n",
+    "    st.stop()\n",
+    "\n",
+    "client = genai.Client(api_key=API_KEY)\n",
+    "\n",
+    "MODEL_NAME = \"gemini-3.1-flash-lite\"\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Page configuration\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "st.set_page_config(\n",
+    "    page_title=\"Gemini Local Chat\",\n",
+    "    page_icon=\"✨\",\n",
+    "    layout=\"wide\",\n",
+    "    initial_sidebar_state=\"expanded\"\n",
+    ")\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Custom CSS\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "st.markdown(\n",
+    "    \"\"\"\n",
+    "    <style>\n",
+    "\n",
+    "    .stApp {\n",
+    "        background:\n",
+    "            radial-gradient(\n",
+    "                circle at top left,\n",
+    "                rgba(70, 90, 180, 0.16),\n",
+    "                transparent 30%\n",
+    "            ),\n",
+    "            radial-gradient(\n",
+    "                circle at bottom right,\n",
+    "                rgba(150, 80, 180, 0.12),\n",
+    "                transparent 30%\n",
+    "            );\n",
+    "    }\n",
+    "\n",
+    "    .main .block-container {\n",
+    "        max-width: 950px;\n",
+    "        padding-top: 2rem;\n",
+    "        padding-bottom: 6rem;\n",
+    "    }\n",
+    "\n",
+    "    .title-container {\n",
+    "        text-align: center;\n",
+    "        margin-bottom: 2rem;\n",
+    "    }\n",
+    "\n",
+    "    .main-title {\n",
+    "        font-size: 2.8rem;\n",
+    "        font-weight: 700;\n",
+    "        margin-bottom: 0.2rem;\n",
+    "    }\n",
+    "\n",
+    "    .subtitle {\n",
+    "        opacity: 0.7;\n",
+    "        font-size: 1rem;\n",
+    "    }\n",
+    "\n",
+    "    [data-testid=\"stChatMessage\"] {\n",
+    "        border-radius: 18px;\n",
+    "        padding: 12px 16px;\n",
+    "        margin-bottom: 10px;\n",
+    "        border: 1px solid rgba(128,128,128,0.15);\n",
+    "    }\n",
+    "\n",
+    "    [data-testid=\"stChatInput\"] {\n",
+    "        border-radius: 20px;\n",
+    "    }\n",
+    "\n",
+    "    .status-box {\n",
+    "        padding: 10px 14px;\n",
+    "        border-radius: 12px;\n",
+    "        border: 1px solid rgba(128,128,128,0.2);\n",
+    "        margin-bottom: 15px;\n",
+    "    }\n",
+    "\n",
+    "    </style>\n",
+    "    \"\"\",\n",
+    "    unsafe_allow_html=True\n",
+    ")\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Session state\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "if \"messages\" not in st.session_state:\n",
+    "    st.session_state.messages = []\n",
+    "\n",
+    "if \"temperature\" not in st.session_state:\n",
+    "    st.session_state.temperature = 0.7\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Sidebar\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "with st.sidebar:\n",
+    "\n",
+    "    st.title(\"✨ Gemini Chat\")\n",
+    "\n",
+    "    st.caption(\"Local Streamlit interface\")\n",
+    "\n",
+    "    st.markdown(\"---\")\n",
+    "\n",
+    "    st.subheader(\"Model\")\n",
+    "\n",
+    "    st.code(MODEL_NAME)\n",
+    "\n",
+    "    st.session_state.temperature = st.slider(\n",
+    "        \"Creativity\",\n",
+    "        min_value=0.0,\n",
+    "        max_value=1.0,\n",
+    "        value=0.7,\n",
+    "        step=0.1\n",
+    "    )\n",
+    "\n",
+    "    st.markdown(\"---\")\n",
+    "\n",
+    "    st.subheader(\"Conversation\")\n",
+    "\n",
+    "    if st.button(\n",
+    "        \"🗑️ Clear chat\",\n",
+    "        use_container_width=True\n",
+    "    ):\n",
+    "        st.session_state.messages = []\n",
+    "        st.rerun()\n",
+    "\n",
+    "    st.markdown(\"---\")\n",
+    "\n",
+    "    st.caption(\n",
+    "        f\"Messages: {len(st.session_state.messages)}\"\n",
+    "    )\n",
+    "\n",
+    "    st.success(\"Gemini API connected\")\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Header\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "st.markdown(\n",
+    "    \"\"\"\n",
+    "    <div class=\"title-container\">\n",
+    "        <div class=\"main-title\">\n",
+    "            ✨ Gemini Local\n",
+    "        </div>\n",
+    "\n",
+    "        <div class=\"subtitle\">\n",
+    "            Ask anything. Powered by Gemini API.\n",
+    "        </div>\n",
+    "    </div>\n",
+    "    \"\"\",\n",
+    "    unsafe_allow_html=True\n",
+    ")\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Welcome screen\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "if len(st.session_state.messages) == 0:\n",
+    "\n",
+    "    st.markdown(\"### 👋 How can I help you today?\")\n",
+    "\n",
+    "    col1, col2 = st.columns(2)\n",
+    "\n",
+    "    with col1:\n",
+    "\n",
+    "        if st.button(\n",
+    "            \"💻 Explain Transformer architecture\",\n",
+    "            use_container_width=True\n",
+    "        ):\n",
+    "            st.session_state.pending_prompt = (\n",
+    "                \"Explain Transformer architecture \"\n",
+    "                \"in a simple and understandable way.\"\n",
+    "            )\n",
+    "\n",
+    "        if st.button(\n",
+    "            \"📊 Explain RAG\",\n",
+    "            use_container_width=True\n",
+    "        ):\n",
+    "            st.session_state.pending_prompt = (\n",
+    "                \"Explain Retrieval Augmented Generation \"\n",
+    "                \"with a simple example.\"\n",
+    "            )\n",
+    "\n",
+    "    with col2:\n",
+    "\n",
+    "        if st.button(\n",
+    "            \"🧠 Explain LLM training\",\n",
+    "            use_container_width=True\n",
+    "        ):\n",
+    "            st.session_state.pending_prompt = (\n",
+    "                \"Explain how modern LLMs are trained.\"\n",
+    "            )\n",
+    "\n",
+    "        if st.button(\n",
+    "            \"🐍 Generate Python code\",\n",
+    "            use_container_width=True\n",
+    "        ):\n",
+    "            st.session_state.pending_prompt = (\n",
+    "                \"Give me a useful beginner Python project.\"\n",
+    "            )\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Display chat history\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "for message in st.session_state.messages:\n",
+    "\n",
+    "    with st.chat_message(message[\"role\"]):\n",
+    "\n",
+    "        st.markdown(message[\"content\"])\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Chat input\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "user_prompt = st.chat_input(\n",
+    "    \"Ask Gemini anything...\"\n",
+    ")\n",
+    "\n",
+    "\n",
+    "# Handle suggestion buttons\n",
+    "if \"pending_prompt\" in st.session_state:\n",
+    "\n",
+    "    user_prompt = st.session_state.pending_prompt\n",
+    "\n",
+    "    del st.session_state.pending_prompt\n",
+    "\n",
+    "\n",
+    "# --------------------------------------------------\n",
+    "# Generate response\n",
+    "# --------------------------------------------------\n",
+    "\n",
+    "if user_prompt:\n",
+    "\n",
+    "    # Save user message\n",
+    "    st.session_state.messages.append(\n",
+    "        {\n",
+    "            \"role\": \"user\",\n",
+    "            \"content\": user_prompt\n",
+    "        }\n",
+    "    )\n",
+    "\n",
+    "    # Show user message\n",
+    "    with st.chat_message(\"user\"):\n",
+    "\n",
+    "        st.markdown(user_prompt)\n",
+    "\n",
+    "\n",
+    "    # Build conversation history\n",
+    "    conversation = []\n",
+    "\n",
+    "    for msg in st.session_state.messages:\n",
+    "\n",
+    "        role = (\n",
+    "            \"user\"\n",
+    "            if msg[\"role\"] == \"user\"\n",
+    "            else \"model\"\n",
+    "        )\n",
+    "\n",
+    "        conversation.append(\n",
+    "            {\n",
+    "                \"role\": role,\n",
+    "                \"parts\": [\n",
+    "                    {\n",
+    "                        \"text\": msg[\"content\"]\n",
+    "                    }\n",
+    "                ]\n",
+    "            }\n",
+    "        )\n",
+    "\n",
+    "\n",
+    "    # Assistant response\n",
+    "    with st.chat_message(\"assistant\"):\n",
+    "\n",
+    "        response_placeholder = st.empty()\n",
+    "\n",
+    "        full_response = \"\"\n",
+    "\n",
+    "        try:\n",
+    "\n",
+    "            stream = client.models.generate_content_stream(\n",
+    "                model=MODEL_NAME,\n",
+    "                contents=conversation\n",
+    "            )\n",
+    "\n",
+    "            for chunk in stream:\n",
+    "\n",
+    "                if chunk.text:\n",
+    "\n",
+    "                    full_response += chunk.text\n",
+    "\n",
+    "                    response_placeholder.markdown(\n",
+    "                        full_response + \"▌\"\n",
+    "                    )\n",
+    "\n",
+    "            response_placeholder.markdown(\n",
+    "                full_response\n",
+    "            )\n",
+    "\n",
+    "        except Exception as e:\n",
+    "\n",
+    "            full_response = (\n",
+    "                f\"Error communicating with Gemini:\\n\\n{e}\"\n",
+    "            )\n",
+    "\n",
+    "            response_placeholder.error(\n",
+    "                full_response\n",
+    "            )\n",
+    "\n",
+    "\n",
+    "    # Save Gemini response\n",
+    "    st.session_state.messages.append(\n",
+    "        {\n",
+    "            \"role\": \"assistant\",\n",
+    "            \"content\": full_response\n",
+    "        }\n",
+    "    )"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "78bd48de",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "env (3.11.15.final.0)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.15"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
