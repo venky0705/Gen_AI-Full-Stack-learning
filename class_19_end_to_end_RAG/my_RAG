@@ -1,0 +1,312 @@
+# ============================================================
+# PERSONAL RAG PIPELINE
+# PDF + Hugging Face Embeddings + FAISS + Gemini
+# ============================================================
+
+
+# ============================================================
+# 1. IMPORTS
+# ============================================================
+
+import os
+
+from dotenv import load_dotenv
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+
+
+# ============================================================
+# 2. LOAD ENVIRONMENT VARIABLES
+# ============================================================
+
+load_dotenv()
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+if GOOGLE_API_KEY is None:
+    raise ValueError(
+        "GOOGLE_API_KEY is not found. Add it to your .env file."
+    )
+
+os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
+
+
+# ============================================================
+# 3. PDF PATH
+# ============================================================
+
+pdf_path = r"C:\Users\ASUS\Desktop\Gen AI Full stak\class_19_end_to_end_RAG\Venkatesh_Vemala_Personal_RAG_Knowledge_Base.pdf"
+
+
+# ============================================================
+# 4. LOAD PDF
+# ============================================================
+
+loader = PyPDFLoader(pdf_path)
+
+documents = loader.load()
+
+print("Number of PDF pages:", len(documents))
+
+
+# ============================================================
+# 5. SPLIT PDF INTO CHUNKS
+# ============================================================
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=150
+)
+
+chunked_data = text_splitter.split_documents(documents)
+
+print("Number of chunks:", len(chunked_data))
+
+
+# ============================================================
+# 6. FREE HUGGING FACE EMBEDDING MODEL
+# ============================================================
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="BAAI/bge-small-en-v1.5",
+    model_kwargs={
+        "device": "cpu"
+    },
+    encode_kwargs={
+        "normalize_embeddings": True
+    }
+)
+
+
+# ============================================================
+# 7. TEST EMBEDDING
+# ============================================================
+
+test_embedding = embeddings.embed_query(
+    "Who is Venkatesh?"
+)
+
+print("Embedding dimension:", len(test_embedding))
+
+
+# ============================================================
+# 8. CREATE FAISS VECTOR DATABASE
+# ============================================================
+
+vector_store = FAISS.from_documents(
+    documents=chunked_data,
+    embedding=embeddings
+)
+
+print("FAISS database created successfully.")
+
+print(
+    "FAISS vector dimension:",
+    vector_store.index.d
+)
+
+
+# ============================================================
+# 9. CREATE RETRIEVER
+# ============================================================
+
+retriever = vector_store.as_retriever(
+    search_type="similarity",
+    search_kwargs={
+        "k": 4
+    }
+)
+
+
+# ============================================================
+# 10. TEST RETRIEVAL
+# ============================================================
+
+test_results = retriever.invoke(
+    "Where is Venkatesh studying?"
+)
+
+print("\nRetrieved documents:")
+
+for i, doc in enumerate(test_results, start=1):
+
+    print("\n" + "=" * 70)
+    print(f"Document {i}")
+    print("=" * 70)
+
+    print(doc.page_content)
+
+    print("\nMetadata:")
+    print(doc.metadata)
+
+
+# ============================================================
+# 11. LOAD GEMINI MODEL
+# ============================================================
+
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3.1-flash-lite",
+    temperature=0
+)
+
+
+# ============================================================
+# 12. RAG PROMPT
+# ============================================================
+
+template = """
+You are a personal AI assistant for Venkatesh Vemala.
+
+Answer the user's question using ONLY the information provided
+in the retrieved context.
+
+Rules:
+
+1. Do not invent information.
+2. If the information is not available in the context, say:
+   "I could not find that information in Venkatesh's knowledge base."
+3. Answer clearly and concisely.
+4. If the question is about education, subjects, grades, work
+   experience, projects, skills, certifications, or personal
+   information, use the retrieved context carefully.
+5. Do not use outside knowledge to answer questions about Venkatesh.
+
+Retrieved Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+"""
+
+
+prompt = PromptTemplate.from_template(template)
+
+
+# ============================================================
+# 13. FORMAT RETRIEVED DOCUMENTS
+# ============================================================
+
+def format_docs(docs):
+
+    return "\n\n".join(
+        doc.page_content
+        for doc in docs
+    )
+
+
+# ============================================================
+# 14. CREATE RAG CHAIN
+# ============================================================
+
+rag_chain = (
+    {
+        "context": retriever | format_docs,
+        "question": RunnablePassthrough()
+    }
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+
+
+# ============================================================
+# 15. TEST RAG
+# ============================================================
+
+question = "Where is Venkatesh studying?"
+
+response = rag_chain.invoke(question)
+
+print("\nQuestion:")
+print(question)
+
+print("\nAnswer:")
+print(response)
+
+
+# ============================================================
+# 16. MORE TEST QUESTIONS
+# ============================================================
+
+questions = [
+
+    "Who is Venkatesh?",
+
+    "What is Venkatesh studying?",
+
+    "Which university is Venkatesh studying at?",
+
+    "What subjects has Venkatesh studied?",
+
+    "What is Venkatesh's work experience?",
+
+    "Where did Venkatesh work before Siemens Healthineers?",
+
+    "What are Venkatesh's technical skills?",
+
+    "What projects has Venkatesh completed?",
+
+    "What certifications does Venkatesh have?",
+
+    "What was Venkatesh's grade in Pattern Recognition?",
+
+    "How many ECTS has Venkatesh completed?"
+]
+
+
+for question in questions:
+
+    print("\n" + "=" * 80)
+
+    print("QUESTION:")
+    print(question)
+
+    answer = rag_chain.invoke(question)
+
+    print("\nANSWER:")
+    print(answer)
+
+
+# ============================================================
+# 17. INTERACTIVE CHAT
+# ============================================================
+
+print("\n")
+print("=" * 80)
+print("Venkatesh Personal RAG Assistant")
+print("Type 'exit' or 'quit' to stop.")
+print("=" * 80)
+
+
+while True:
+
+    user_question = input("\nYou: ")
+
+    if user_question.lower().strip() in [
+        "exit",
+        "quit"
+    ]:
+
+        print("Assistant: Goodbye!")
+
+        break
+
+
+    response = rag_chain.invoke(
+        user_question
+    )
+
+    print("\nAssistant:")
+    print(response)
