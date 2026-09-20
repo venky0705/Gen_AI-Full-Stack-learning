@@ -1,0 +1,24 @@
+# Core
+python-dotenv
+ipykernel
+
+# LangChain
+langchain
+langchain-core
+langchain-community
+
+# Embeddings - BGE
+langchain-huggingface
+sentence-transformers
+transformers
+torch
+
+# Pinecone Vector DB
+pinecone
+langchain-pinecone
+
+# Groq LLM
+langchain-groq
+
+# PDF loading / processing (if needed)
+pypdf
